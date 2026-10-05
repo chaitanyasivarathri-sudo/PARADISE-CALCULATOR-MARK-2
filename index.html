@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PARADISE Voice Calculator</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f4f8;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+    }
+    .calculator {
+        width: min(92%, 520px);
+        background: white;
+        padding: 28px;
+        border-radius: 18px;
+        box-shadow: 0 8px 30px rgba(0,0,0,.15);
+        text-align: center;
+    }
+    h1 { margin-top: 0; }
+    input {
+        width: 90%;
+        padding: 14px;
+        font-size: 18px;
+        border: 1px solid #bbb;
+        border-radius: 10px;
+        margin: 8px 0;
+    }
+    button {
+        padding: 12px 18px;
+        margin: 7px;
+        border: 0;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    #voiceBtn { background: #222; color: white; }
+    #calcBtn { background: #1976d2; color: white; }
+    #clearBtn { background: #ddd; }
+    #status { margin: 14px 0; min-height: 24px; }
+    #result {
+        font-size: 24px;
+        font-weight: bold;
+        margin-top: 18px;
+    }
+</style>
+</head>
+<body>
+<div class="calculator">
+    <h1>PARADISE</h1>
+    <p>Voice Calculator</p>
+
+    <input id="expression" type="text"
+           placeholder="Example: 10 plus 5 or 2 power 3">
+
+    <div>
+        <button id="voiceBtn" onclick="voiceInput()">🎤 Speak</button>
+        <button id="calcBtn" onclick="calculate()">Calculate</button>
+        <button id="clearBtn" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div id="status">Ready</div>
+    <div id="result"></div>
+</div>
+
+<script>
+function speak(text) {
+    if ("speechSynthesis" in window) {
+        speechSynthesis.cancel();
+        const message = new SpeechSynthesisUtterance(text);
+        message.rate = 1.1;
+        message.volume = 1.0;
+        speechSynthesis.speak(message);
+    }
+}
+
+function voiceInput() {
+    const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        document.getElementById("status").textContent =
+            "Voice recognition is not supported. Try Google Chrome.";
+        speak("Voice recognition is not supported. Please use Google Chrome.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    document.getElementById("status").textContent =
+        "Listening... Speak your calculation.";
+    speak("Speak your calculation");
+
+    recognition.start();
+
+    recognition.onresult = function(event) {
+        const text = event.results[0][0].transcript;
+        document.getElementById("expression").value = text;
+        document.getElementById("status").textContent = "You said: " + text;
+        calculate();
+    };
+
+    recognition.onerror = function(event) {
+        document.getElementById("status").textContent =
+            "Could not understand: " + event.error;
+        speak("Could not understand");
+    };
+
+    recognition.onend = function() {
+        if (document.getElementById("status").textContent === "Listening... Speak your calculation.") {
+            document.getElementById("status").textContent = "Recording finished.";
+        }
+    };
+}
+
+function calculate() {
+    let text = document.getElementById("expression").value.toLowerCase().trim();
+
+    if (!text) {
+        document.getElementById("status").textContent =
+            "Please enter or speak a calculation.";
+        return;
+    }
+
+    // Convert spoken operators to symbols.
+    text = text.replace(/\bplus\b/g, "+");
+    text = text.replace(/\badd\b/g, "+");
+    text = text.replace(/\bminus\b/g, "-");
+    text = text.replace(/\bsubtract\b/g, "-");
+    text = text.replace(/\bmultiply\b/g, "*");
+    text = text.replace(/\btimes\b/g, "*");
+    text = text.replace(/\binto\b/g, "*");
+    text = text.replace(/\bdivide\b/g, "/");
+    text = text.replace(/\bdivided by\b/g, "/");
+    text = text.replace(/\bpower of\b/g, "**");
+    text = text.replace(/\bpower\b/g, "**");
+
+    // Also support normal x for multiplication.
+    text = text.replace(/\bx\b/g, "*");
+
+    // Supports numbers such as -2, 3.5, 10, etc.
+    const match = text.match(
+        /^\s*(-?\d+(?:\.\d+)?)\s*(\*\*|[+\-*/])\s*(-?\d+(?:\.\d+)?)\s*$/
+    );
+
+    if (!match) {
+        showInvalid("Your operation is not valid. Please check it once.");
+        return;
+    }
+
+    const n1 = Number(match[1]);
+    const operation = match[2];
+    const n2 = Number(match[3]);
+    let answer;
+
+    try {
+        switch (operation) {
+            case "+": answer = n1 + n2; break;
+            case "-": answer = n1 - n2; break;
+            case "*": answer = n1 * n2; break;
+            case "/":
+                if (n2 === 0) throw new Error("Cannot divide by zero.");
+                answer = n1 / n2;
+                break;
+            case "**": answer = Math.pow(n1, n2); break;
+            default: throw new Error("Invalid operation");
+        }
+
+        if (!Number.isFinite(answer)) {
+            throw new Error("The result is not a finite number.");
+        }
+
+        document.getElementById("result").textContent =
+            `${n1} ${operation} ${n2} = ${answer}`;
+        document.getElementById("status").textContent =
+            "Your operation is valid.";
+        speak("The answer is " + answer);
+    } catch (error) {
+        showInvalid(error.message);
+    }
+}
+
+function showInvalid(message) {
+    document.getElementById("result").textContent = "";
+    document.getElementById("status").textContent = message;
+    speak(message);
+}
+
+function clearAll() {
+    document.getElementById("expression").value = "";
+    document.getElementById("result").textContent = "";
+    document.getElementById("status").textContent = "Ready";
+    speechSynthesis.cancel();
+}
+</script>
+</body>
+</html>
